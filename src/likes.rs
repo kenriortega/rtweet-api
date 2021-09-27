@@ -13,8 +13,8 @@ use diesel::{ExpressionMethods, Insertable, Queryable, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[table_name = "likes"]
 #[derive(Queryable, Insertable, Serialize, Deserialize)]
+#[table_name = "likes"]
 struct Like {
     id: Uuid,
     created_at: NaiveDateTime,
@@ -41,14 +41,12 @@ pub async fn get_likes_by_tweet_id(
     let t_id_uuid = Uuid::from_str(t_id); // tweet id formateado a uuid
 
     if t_id_uuid.is_err() {
-        println!("tweet id inválido, error: {:?}", t_id_uuid.err());
+        println!("invalid tweet id, error: {:?}", t_id_uuid.err());
         // si no pudimos convertir a un uuid válido, asumimos que el tweet no existe.
         return HttpResponse::NotFound().await.unwrap();
     }
 
-    let conn = pool
-        .get()
-        .expect("No pude obtener conexión a la base de datos");
+    let conn = pool.get().expect("Can`t connect to the DB");
     let response = list_likes(&conn, t_id_uuid.unwrap());
 
     HttpResponse::Ok()
@@ -73,12 +71,27 @@ fn list_likes(
 #[delete("/tweets/{id}/likes")]
 pub async fn delete_likes_by_tweet_id(
     path: Path<(String,)>,
-    _pool: Data<Pool<ConnectionManager<PgConnection>>>,
+    pool: Data<Pool<ConnectionManager<PgConnection>>>,
 ) -> HttpResponse {
-    let tweet = format!("tweet: {:?}", path.0);
+    use crate::schema::likes::dsl::*;
+
+    let t_id = &path.0 .0; // tweet id desde los parametros de la url
+    let t_id_uuid = Uuid::from_str(t_id); // tweet id formateado a uuid
+
+    if t_id_uuid.is_err() {
+        println!("invalid tweet id, error: {:?}", t_id_uuid.err());
+        // si no pudimos convertir a un uuid válido, asumimos que el tweet no existe.
+        return HttpResponse::NotFound().await.unwrap();
+    }
+    let conn = pool.get().expect("Can`t connect to the DB");
+
+    let num_deleted = diesel::delete(likes.filter(tweet_id.eq(t_id_uuid.unwrap())))
+        .execute(&conn)
+        .expect("Error deleting likes");
+
     HttpResponse::Ok()
         .content_type(constants::APPLICATION_JSON)
-        .json(tweet)
+        .json(num_deleted)
 }
 // /tweets/:id/likes POST: create like by tweet by id
 #[post("/tweets/{id}/likes")]
@@ -88,7 +101,7 @@ pub async fn post_likes_by_tweet_id(
 ) -> HttpResponse {
     use crate::schema::likes::dsl::*;
     let t_id = &path.0 .0;
-    let conn = pool.get().expect("Error to insert");
+    let conn = pool.get().expect("Can`t connect to the DB");
     let like = Like::new(Uuid::from_str(t_id).unwrap());
     let result = diesel::insert_into(likes)
         .values(like)
