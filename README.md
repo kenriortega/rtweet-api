@@ -20,3 +20,10 @@ diesel migration generate create_<modelsName>
 
 
 ```
+
+```bash
+
+curl -X POST -d "my first tweet" -H "Content-type: application/json" http://localhost:8000/tweets | jq
+
+curl -X GET -H "Content-type: application/json" http://localhost:8000/tweets | jq
+```
